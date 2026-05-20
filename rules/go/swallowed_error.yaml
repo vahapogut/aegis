@@ -1,0 +1,20 @@
+rule:
+  id: "ai-go-swallowed-error"
+  language: "go"
+  confidence: "MEDIUM"
+  message: "Swallowed error detected. AI often assigns errors to blank identifier '_' instead of handling them."
+  explanation: "AI coding assistants frequently swallow errors in Go by discarding them using the blank identifier '_' (e.g., 'result, _ := someFunction()'). Discarding errors hides failures and leads to unexpected runtime behaviors. Always capture and check if err != nil."
+  query: >
+    [
+      (assignment_statement
+        left: (expression_list
+          (identifier) @blank (#eq? @blank "_")
+        )
+      ) @violation
+      (short_var_declaration
+        left: (expression_list
+          (identifier)
+          (identifier) @blank (#eq? @blank "_")
+        )
+      ) @violation
+    ]

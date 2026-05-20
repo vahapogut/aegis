@@ -2,15 +2,15 @@
   <img src="ipeclabs-logo-light.svg" width="180" alt="Aegis by IPEC Labs"/>
   <h1>Aegis Security</h1>
   <p><strong>AI-era security scanner for LLM-generated code.</strong></p>
-  <p>Detect hallucinated vulnerabilities, auth bypasses, floating promises, and risky AI-generated patterns in <b>TypeScript</b>, <b>JavaScript</b>, and <b>Python</b> — before production.</p>
+  <p>Detect hallucinated vulnerabilities, auth bypasses, floating promises, and risky AI-generated patterns in <b>TypeScript</b>, <b>JavaScript</b>, <b>Python</b>, and <b>Go</b> — before production.</p>
 
   <br/>
 
   <a href="#quick-start"><img src="https://img.shields.io/badge/crates.io-aegis-blue?style=for-the-badge&logo=rust" alt="crates.io"/></a>
 	  <a href="#quick-start"><img src="https://img.shields.io/badge/npm-aegis--security-red?style=for-the-badge&logo=npm" alt="npm"/></a>
-	  <a href="#tests"><img src="https://img.shields.io/badge/tests-24_passed-brightgreen?style=for-the-badge" alt="Tests"/></a>
+	  <a href="#tests"><img src="https://img.shields.io/badge/tests-28_passed-brightgreen?style=for-the-badge" alt="Tests"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-green?style=for-the-badge" alt="License"/></a>
-  <a href="#rule-showcase"><img src="https://img.shields.io/badge/rules-33-red?style=for-the-badge" alt="Rules"/></a>
+  <a href="#rule-showcase"><img src="https://img.shields.io/badge/rules-38-red?style=for-the-badge" alt="Rules"/></a>
 
 </div>
 
@@ -34,6 +34,26 @@ aegis audit .
 
 No config needed. No cloud. No API keys. 100% local.
 
+### Ignoring Violations & Files
+
+You can ignore specific directories using a `.aegisignore` file in the root of your project.
+
+To ignore specific rules inline, add an `aegis-ignore` comment on the violation line or the line directly above it:
+
+```go
+// aegis-ignore: ai-go-insecure-tls
+tr := &http.Transport{
+    TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+}
+```
+
+Or ignore all rules for a specific block:
+
+```typescript
+// aegis-ignore: all
+eval(userInput);
+```
+
 ---
 
 ## Supported Languages
@@ -43,7 +63,7 @@ No config needed. No cloud. No API keys. 100% local.
 | TypeScript / TSX | 14 | Stable |
 | JavaScript / JSX | 7 | Stable |
 | Python | 12 | Stable |
-| Go | — | Planned |
+| Go | 5 | Stable |
 | Rust | — | Planned |
 
 More languages coming soon. Aegis uses Tree-sitter, which supports 40+ languages — the engine is ready, we just need community-driven rules.
@@ -170,7 +190,7 @@ const STRIPE_KEY = "sk_live_1234567890";
 
 ## Rule Showcase
 
-Aegis ships with **33 precision-first rules** across TypeScript, JavaScript, and Python — all tested with zero false positives.
+Aegis ships with **38 precision-first rules** across TypeScript, JavaScript, Python, and Go — all tested with zero false positives.
 
 ### TypeScript Rules (16)
 
@@ -226,6 +246,16 @@ Aegis ships with **33 precision-first rules** across TypeScript, JavaScript, and
 | `ai-default-secret-key` | HIGH | Django SECRET_KEY with placeholder value |
 | `ai-broad-except` | MEDIUM | Catching `Exception` too broadly |
 | `ai-django-debug-true` | HIGH | Django `DEBUG=True` in production |
+
+### Go Rules (5)
+
+| Rule ID | Severity | Problem Detected |
+|---------|----------|------------------|
+| `ai-go-sql-injection` | HIGH | SQL query built via string formatting or concatenation |
+| `ai-go-insecure-tls` | HIGH | TLS verification disabled via InsecureSkipVerify |
+| `ai-go-swallowed-error` | MEDIUM | Error swallowed via blank identifier `_` |
+| `ai-go-command-injection` | HIGH | OS command arguments built using concatenation |
+| `ai-go-hardcoded-secret` | HIGH | API keys and credentials hardcoded in Go source |
 
 ---
 

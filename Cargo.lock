@@ -16,6 +16,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "tree-sitter",
+ "tree-sitter-go",
  "tree-sitter-python",
  "tree-sitter-typescript",
  "uuid",
@@ -732,6 +733,16 @@ checksum = "df7cc499ceadd4dcdf7ec6d4cbc34ece92c3fa07821e287aedecd4416c516dca"
 dependencies = [
  "cc",
  "regex",
+]
+
+[[package]]
+name = "tree-sitter-go"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55cb318be5ccf75f44e054acf6898a5c95d59b53443eed578e16be0cd7ec037f"
+dependencies = [
+ "cc",
+ "tree-sitter",
 ]
 
 [[package]]

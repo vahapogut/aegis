@@ -1,0 +1,11 @@
+rule:
+  id: "ai-go-insecure-tls"
+  language: "go"
+  confidence: "HIGH"
+  message: "Insecure TLS configuration detected. AI often disables certificate verification."
+  explanation: "Setting 'InsecureSkipVerify: true' in tls.Config disables SSL/TLS certificate validation, which makes your Go application vulnerable to Man-In-The-Middle (MITM) attacks in production. Always validate certificates."
+  query: >
+    (keyed_element
+      key: (literal_element) @key (#eq? @key "InsecureSkipVerify")
+      value: (literal_element) @val (#eq? @val "true")
+    ) @violation

@@ -1,0 +1,26 @@
+rule:
+  id: "ai-go-command-injection"
+  language: "go"
+  confidence: "HIGH"
+  message: "Potential Command Injection. AI often concatenates user input into shell commands."
+  explanation: "AI coding assistants frequently generate calls to exec.Command or exec.CommandContext by concatenating arguments or running commands via shell execution (like sh -c). This allows attackers to execute arbitrary system commands. Pass arguments as separate elements to exec.Command instead of using string concatenation or formatting."
+  query: >
+    (call_expression
+      function: (selector_expression
+        operand: (identifier) @pkg (#eq? @pkg "exec")
+        field: (field_identifier) @cmd (#match? @cmd "^(Command|CommandContext)$")
+      )
+      arguments: (argument_list
+        [
+          (binary_expression
+            operator: "+"
+          ) @violation
+          (call_expression
+            function: (selector_expression
+              operand: (identifier) @fmt_pkg (#eq? @fmt_pkg "fmt")
+              field: (field_identifier) @fmt_func (#match? @fmt_func "^(Sprintf|Printf|Fprintf)$")
+            )
+          ) @violation
+        ]
+      )
+    )

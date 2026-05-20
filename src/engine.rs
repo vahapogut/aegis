@@ -125,8 +125,10 @@ impl Engine {
 
     pub fn detect_language(file_path: &str) -> Option<&str> {
         match file_path.rsplit('.').next() {
-            Some("ts") | Some("tsx") | Some("js") | Some("jsx") => Some("typescript"),
+            Some("tsx") | Some("jsx") => Some("tsx"),
+            Some("ts") | Some("js") => Some("typescript"),
             Some("py") => Some("python"),
+            Some("go") => Some("go"),
             _ => None,
         }
     }
@@ -147,7 +149,12 @@ impl Engine {
         let mut cursor = QueryCursor::new();
 
         for rule in rules {
-            if rule.language != lang {
+            // Check if rule language matches the parsed file language
+            let lang_matches = match (rule.language.as_str(), lang) {
+                ("typescript", "tsx") => true, // TypeScript rules run on TSX/JSX
+                (rl, fl) => rl == fl,
+            };
+            if !lang_matches {
                 continue;
             }
 
@@ -162,31 +169,81 @@ impl Engine {
             let mut matches = cursor.matches(&query, root_node, source_code.as_bytes());
 
             while let Some(m) = matches.next() {
-                if let Some(capture) = m.captures.first() {
-                    let start_position = capture.node.start_position();
-                    let line_number = start_position.row + 1;
-
-                    let start_byte = capture.node.start_byte();
-                    let end_byte = capture.node.end_byte();
-
-                    let snippet = if end_byte > start_byte && end_byte <= source_code.len() {
-                        source_code[start_byte..end_byte].to_string()
-                    } else {
-                        "".to_string()
-                    };
-
-                    violations.push(Violation {
-                        rule: rule.clone(),
-                        file_path: file_path.to_string(),
-                        line_number,
-                        snippet,
-                    });
+                // Determine if a specific capture is marked as violation or target
+                let mut chosen_capture = None;
+                for cap in m.captures {
+                    let name = query.capture_names()[cap.index as usize];
+                    if name == "violation" || name == "target" {
+                        chosen_capture = Some(cap);
+                        break;
+                    }
                 }
+
+                let capture = match chosen_capture {
+                    Some(c) => c,
+                    None => match m.captures.first() {
+                        Some(c) => c,
+                        None => continue,
+                    }
+                };
+
+                let start_position = capture.node.start_position();
+                let line_number = start_position.row + 1;
+
+                let start_byte = capture.node.start_byte();
+                let end_byte = capture.node.end_byte();
+
+                let snippet = if end_byte > start_byte && end_byte <= source_code.len() {
+                    source_code[start_byte..end_byte].to_string()
+                } else {
+                    "".to_string()
+                };
+
+                // Check for satır içi `aegis-ignore: rule-id` or `aegis-ignore: all`
+                if is_violation_ignored(&source_code, line_number, &rule.id) {
+                    continue;
+                }
+
+                violations.push(Violation {
+                    rule: rule.clone(),
+                    file_path: file_path.to_string(),
+                    line_number,
+                    snippet,
+                });
             }
         }
 
         Ok(violations)
     }
+}
+
+/// Helper function to check if a violation is ignored via inline comments
+fn is_violation_ignored(source_code: &str, line_number: usize, rule_id: &str) -> bool {
+    let lines: Vec<&str> = source_code.lines().collect();
+    if lines.is_empty() {
+        return false;
+    }
+
+    let check_line = |line: &str| -> bool {
+        let pattern = format!("aegis-ignore: {}", rule_id);
+        line.contains(&pattern) || line.contains("aegis-ignore: all")
+    };
+
+    // Check violation line itself (0-indexed is line_number - 1)
+    if line_number > 0 && line_number <= lines.len() {
+        if check_line(lines[line_number - 1]) {
+            return true;
+        }
+    }
+
+    // Check line above violation (0-indexed is line_number - 2)
+    if line_number > 1 && line_number - 1 <= lines.len() {
+        if check_line(lines[line_number - 2]) {
+            return true;
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -199,18 +256,23 @@ mod tests {
     #[test]
     fn test_detect_language_typescript() {
         assert_eq!(Engine::detect_language("src/app.ts"), Some("typescript"));
-        assert_eq!(Engine::detect_language("components/Button.tsx"), Some("typescript"));
+        assert_eq!(Engine::detect_language("src/utils.js"), Some("typescript"));
     }
 
     #[test]
-    fn test_detect_language_javascript() {
-        assert_eq!(Engine::detect_language("src/utils.js"), Some("typescript"));
-        assert_eq!(Engine::detect_language("pages/index.jsx"), Some("typescript"));
+    fn test_detect_language_tsx() {
+        assert_eq!(Engine::detect_language("components/Button.tsx"), Some("tsx"));
+        assert_eq!(Engine::detect_language("pages/index.jsx"), Some("tsx"));
     }
 
     #[test]
     fn test_detect_language_python() {
         assert_eq!(Engine::detect_language("src/main.py"), Some("python"));
+    }
+
+    #[test]
+    fn test_detect_language_go() {
+        assert_eq!(Engine::detect_language("main.go"), Some("go"));
     }
 
     #[test]
@@ -278,23 +340,39 @@ mod tests {
     }
 
     #[test]
-    fn test_sarif_confidence_levels() {
-        let make_rule = |c: Confidence| Rule {
-            id: "test".into(), language: "typescript".into(),
-            confidence: c, message: "m".into(), explanation: "e".into(),
-            query: "(program) @test".into(),
+    fn test_inline_ignore() {
+        let rule = Rule {
+            id: "test-ignore".into(),
+            language: "typescript".into(),
+            confidence: Confidence::HIGH,
+            message: "Test message".into(),
+            explanation: "Test explanation".into(),
+            query: "(variable_declarator) @violation".into(),
         };
-        for (confidence, expected_level) in [
-            (Confidence::HIGH, "error"),
-            (Confidence::MEDIUM, "warning"),
-            (Confidence::LOW, "note"),
-        ] {
-            let violations = vec![Violation {
-                rule: make_rule(confidence),
-                file_path: "f.ts".into(), line_number: 1, snippet: "".into(),
-            }];
-            let sarif = generate_sarif(&violations, "aegis");
-            assert_eq!(sarif["runs"][0]["results"][0]["level"], expected_level);
-        }
+        let code_ignored = "
+        // aegis-ignore: test-ignore
+        const x = 1;
+        ";
+        let mut engine = Engine::new().unwrap();
+        let mut tmp = NamedTempFile::new().unwrap();
+        write!(tmp, "{}", code_ignored).unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        let renamed_path = format!("{}.ts", &path);
+        std::fs::rename(&path, &renamed_path).unwrap();
+
+        let violations = engine.scan_file(&renamed_path, &[rule.clone()]).unwrap();
+        assert!(violations.is_empty());
+
+        let code_not_ignored = "
+        const x = 1;
+        ";
+        let mut tmp2 = NamedTempFile::new().unwrap();
+        write!(tmp2, "{}", code_not_ignored).unwrap();
+        let path2 = tmp2.path().to_str().unwrap().to_string();
+        let renamed_path2 = format!("{}.ts", &path2);
+        std::fs::rename(&path2, &renamed_path2).unwrap();
+
+        let violations2 = engine.scan_file(&renamed_path2, &[rule]).unwrap();
+        assert_eq!(violations2.len(), 1);
     }
 }

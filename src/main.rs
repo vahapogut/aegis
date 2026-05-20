@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
             }
 
             // Collect files
-            let supported_extensions = ["ts", "tsx", "js", "jsx", "py"];
+            let supported_extensions = ["ts", "tsx", "js", "jsx", "py", "go"];
             let mut files_to_scan = Vec::new();
             let target_path = Path::new(path);
             if target_path.is_file() {
@@ -98,15 +98,24 @@ fn main() -> anyhow::Result<()> {
             let mut all_violations = Vec::new();
 
             for file in files_to_scan {
-                let violations = scan_engine.scan_file(file.to_str().unwrap(), &loaded_rules)?;
-                for v in violations {
-                    total_violations += 1;
-                    match v.rule.confidence {
-                        rule::Confidence::HIGH => high_count += 1,
-                        rule::Confidence::MEDIUM => medium_count += 1,
-                        rule::Confidence::LOW => low_count += 1,
+                let file_str = file.to_string_lossy();
+                match scan_engine.scan_file(&file_str, &loaded_rules) {
+                    Ok(violations) => {
+                        for v in violations {
+                            total_violations += 1;
+                            match v.rule.confidence {
+                                rule::Confidence::HIGH => high_count += 1,
+                                rule::Confidence::MEDIUM => medium_count += 1,
+                                rule::Confidence::LOW => low_count += 1,
+                            }
+                            all_violations.push(v);
+                        }
                     }
-                    all_violations.push(v);
+                    Err(e) => {
+                        if format.to_lowercase() != "json" && format.to_lowercase() != "sarif" {
+                            eprintln!("{} Failed to scan file '{}': {}", "[WARNING]".yellow(), file_str, e);
+                        }
+                    }
                 }
             }
 

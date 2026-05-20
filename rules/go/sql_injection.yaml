@@ -1,0 +1,28 @@
+rule:
+  id: "ai-go-sql-injection"
+  language: "go"
+  confidence: "HIGH"
+  message: "SQL Injection via string formatting or concatenation. AI often uses fmt.Sprintf or + operator in SQL queries."
+  explanation: "AI coding assistants frequently construct raw SQL strings using string concatenation or fmt.Sprintf. If any part of this string is controlled by a user, it leads to direct SQL Injection. Use Go's parameterized SQL queries (e.g., db.Query(\"SELECT * FROM users WHERE id = ?\", id)) instead."
+  query: >
+    [
+      (call_expression
+        function: (selector_expression
+          field: (field_identifier) @method (#match? @method "^(Query|QueryRow|Exec|Select|QueryContext|QueryRowContext|ExecContext)$")
+        )
+        arguments: (argument_list
+          [
+            (binary_expression
+              left: (string_literal)
+              operator: "+"
+            ) @violation
+            (call_expression
+              function: (selector_expression
+                operand: (identifier) @pkg (#eq? @pkg "fmt")
+                field: (field_identifier) @fmt_func (#match? @fmt_func "^(Sprintf|Printf|Fprintf)$")
+              )
+            ) @violation
+          ]
+        )
+      )
+    ]

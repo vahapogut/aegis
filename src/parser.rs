@@ -3,7 +3,9 @@ use anyhow::Result;
 
 pub struct TsParser {
     ts_parser: Parser,
+    tsx_parser: Parser,
     py_parser: Parser,
+    go_parser: Parser,
 }
 
 impl TsParser {
@@ -13,17 +15,34 @@ impl TsParser {
         ts_parser.set_language(&ts_lang)
             .map_err(|e| anyhow::anyhow!("Failed to set TypeScript language: {:?}", e))?;
 
+        let mut tsx_parser = Parser::new();
+        let tsx_lang: Language = tree_sitter_typescript::language_tsx();
+        tsx_parser.set_language(&tsx_lang)
+            .map_err(|e| anyhow::anyhow!("Failed to set TSX language: {:?}", e))?;
+
         let mut py_parser = Parser::new();
         let py_lang: Language = tree_sitter_python::language();
         py_parser.set_language(&py_lang)
             .map_err(|e| anyhow::anyhow!("Failed to set Python language: {:?}", e))?;
 
-        Ok(Self { ts_parser, py_parser })
+        let mut go_parser = Parser::new();
+        let go_lang: Language = tree_sitter_go::language();
+        go_parser.set_language(&go_lang)
+            .map_err(|e| anyhow::anyhow!("Failed to set Go language: {:?}", e))?;
+
+        Ok(Self {
+            ts_parser,
+            tsx_parser,
+            py_parser,
+            go_parser,
+        })
     }
 
     pub fn parse(&mut self, source_code: &str, lang: &str) -> Option<Tree> {
         match lang {
             "python" => self.py_parser.parse(source_code, None),
+            "tsx" => self.tsx_parser.parse(source_code, None),
+            "go" => self.go_parser.parse(source_code, None),
             _ => self.ts_parser.parse(source_code, None),
         }
     }
@@ -31,6 +50,8 @@ impl TsParser {
     pub fn get_language(&self, lang: &str) -> Language {
         match lang {
             "python" => tree_sitter_python::language(),
+            "tsx" => tree_sitter_typescript::language_tsx(),
+            "go" => tree_sitter_go::language(),
             _ => tree_sitter_typescript::language_typescript(),
         }
     }
@@ -56,10 +77,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_typescript_jsx() {
+    fn test_parse_typescript_tsx() {
         let mut parser = TsParser::new().unwrap();
-        let tree = parser.parse("const el = <div />;", "typescript");
+        // Parsing using TSX parser
+        let tree = parser.parse("const el = <div />;", "tsx");
         assert!(tree.is_some());
+        let tree = tree.unwrap();
+        assert!(!tree.root_node().has_error());
     }
 
     #[test]
@@ -69,6 +93,15 @@ mod tests {
         assert!(tree.is_some());
         let tree = tree.unwrap();
         assert!(tree.root_node().to_sexp().contains("module"));
+    }
+
+    #[test]
+    fn test_parse_go() {
+        let mut parser = TsParser::new().unwrap();
+        let tree = parser.parse("package main\nfunc main() {}", "go");
+        assert!(tree.is_some());
+        let tree = tree.unwrap();
+        assert!(tree.root_node().to_sexp().contains("source_file"));
     }
 
     #[test]
@@ -85,7 +118,13 @@ mod tests {
     fn test_get_language_typescript() {
         let parser = TsParser::new().unwrap();
         let lang = parser.get_language("typescript");
-        // Just verify it doesn't crash and returns valid language
+        assert!(lang.version() > 0);
+    }
+
+    #[test]
+    fn test_get_language_tsx() {
+        let parser = TsParser::new().unwrap();
+        let lang = parser.get_language("tsx");
         assert!(lang.version() > 0);
     }
 
@@ -93,6 +132,13 @@ mod tests {
     fn test_get_language_python() {
         let parser = TsParser::new().unwrap();
         let lang = parser.get_language("python");
+        assert!(lang.version() > 0);
+    }
+
+    #[test]
+    fn test_get_language_go() {
+        let parser = TsParser::new().unwrap();
+        let lang = parser.get_language("go");
         assert!(lang.version() > 0);
     }
 }
